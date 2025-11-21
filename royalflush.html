@@ -275,9 +275,9 @@
                 this.angle += this.speed;
                 this.radius -= this.inwardSpeed;
                 
-                // Speeded up physics calculations (+20%)
-                this.speed = 0.048 + (150 / (this.radius + 50)) * 0.01;
-                this.inwardSpeed = 2.4 + (150 / (this.radius + 50)) * 0.1;
+                // Reduced speeds by another 20%
+                this.speed = 0.019 + (150 / (this.radius + 50)) * 0.004;
+                this.inwardSpeed = 0.94 + (150 / (this.radius + 50)) * 0.04;
                 
                 this.wobblePhase += 0.1;
 
@@ -436,8 +436,8 @@
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
             
-            // Water Direction Reversed & Speed Increased
-            vortexAngle += 0.04;
+            // Water rotation slowed down by 20%
+            vortexAngle += 0.022;
 
             // 1. Draw Water / Bowl (Bottom Layer)
             drawBowl(centerX, centerY, maxRadius);
