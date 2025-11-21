@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Royal Flush Prototype</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@400;500;700;900&display=swap');
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #000000;
+            color: white;
+            overflow: hidden; /* Prevent scrolling generally */
+        }
+
+        .font-display {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        /* Custom Scrollbar for control panel if it overflows */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #111111 0%, #000000 100%);
+            overflow: hidden;
+        }
+
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+
+        /* Notification Animations */
+        @keyframes slideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        
+        .notification-pill {
+            animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        .notification-pill.fading {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<!-- Layout: Flex Column Reverse (Canvas Top, Controls Bottom on Mobile) -> Flex Row (Controls Left, Canvas Right on Desktop) -->
+<body class="h-[100dvh] w-screen flex flex-col-reverse md:flex-row">
+
+    <!-- HIDDEN VIDEO ELEMENT -->
+    <video id="introVideo" src="intro.mp4" style="display:none;" playsinline muted></video>
+
+    <!-- LEFT PANEL: CONTROLS -->
+    <!-- Mobile: 50% height, scrollable. Desktop: Fixed width, Full height. -->
+    <div class="w-full h-[50%] md:h-full md:w-[380px] bg-[#0f0f0f] border-t md:border-t-0 md:border-r border-gray-800 flex flex-col p-4 md:p-6 relative z-20 shrink-0 overflow-y-auto md:overflow-visible">
+        
+        <!-- Logo (Hidden on Mobile, Visible on Desktop) -->
+        <div class="mb-8 hidden md:block">
+            <img src="flush.png" 
+                 alt="Royal Flush" 
+                 class="w-32 object-contain"
+                 onerror="this.style.display='none'; document.getElementById('fallbackLogo').classList.remove('hidden');"
+            >
+            <div id="fallbackLogo" class="hidden">
+                <h1 class="text-2xl font-display font-black italic tracking-wider text-white leading-none">
+                    ROYAL <span class="text-[#4ade80]">FLUSH</span>
+                </h1>
+            </div>
+        </div>
+
+        <!-- Controls Container -->
+        <div class="flex-1 flex flex-col gap-4 md:gap-6">
+            
+            <!-- Mode Section -->
+            <div>
+                <h3 class="text-white font-normal text-[15px] mb-2">Mode</h3>
+                <div class="flex gap-3">
+                    <button id="btnManual" class="flex-1 py-3 rounded-lg border border-[#00FF00] bg-[#00FF00]/20 text-[#00FF00] font-bold text-sm transition-all shadow-[0_0_10px_rgba(0,255,0,0.1)]">
+                        Manual
+                    </button>
+                    <button id="btnAuto" class="flex-1 py-3 rounded-lg border border-[#333] bg-[#1a1a1a] text-gray-300 font-bold text-sm hover:bg-[#222] transition-all">
+                        Auto
+                    </button>
+                </div>
+                <!-- Auto Options (Hidden by default) -->
+                <div id="autoSettings" class="hidden mt-3 p-3 bg-[#161616] rounded-lg border border-[#333]">
+                     <label class="text-xs text-gray-400 block mb-1">Number of Bets</label>
+                     <input type="number" id="autoCount" value="0" placeholder="0 = ∞" class="w-full bg-black border border-[#333] rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-green-500">
+                </div>
+            </div>
+
+            <!-- Risk Section -->
+            <div>
+                <h3 class="text-white font-normal text-[15px] mb-2">Risk</h3>
+                <div class="flex gap-3">
+                    <button onclick="setRisk('low')" id="riskLow" class="flex-1 py-3 rounded-lg border border-[#E128FF] bg-[#2d1b3e] text-[#E128FF] font-bold text-sm transition-all shadow-[0_0_10px_rgba(225,40,255,0.2)]">
+                        Low
+                    </button>
+                    <button onclick="setRisk('medium')" id="riskMedium" class="flex-1 py-3 rounded-lg border border-[#333] bg-[#1a1a1a] text-gray-300 font-bold text-sm hover:bg-[#222] transition-all">
+                        Medium
+                    </button>
+                    <button onclick="setRisk('high')" id="riskHigh" class="flex-1 py-3 rounded-lg border border-[#333] bg-[#1a1a1a] text-gray-300 font-bold text-sm hover:bg-[#222] transition-all">
+                        High
+                    </button>
+                </div>
+            </div>
+
+            <!-- Bet Amount Section -->
+            <div>
+                <div class="flex justify-between items-end mb-2">
+                    <h3 class="text-white font-normal text-[15px]">Bet Amount</h3>
+                    <div class="text-gray-400 text-xs flex items-center gap-1">
+                        Balance <span class="text-blue-400 mx-0.5">🪙</span> <span class="text-white font-bold text-sm" id="balanceDisplay">2000</span>
+                    </div>
+                </div>
+                
+                <!-- Custom Input Container -->
+                <div class="bg-black border border-white rounded-lg p-1.5 flex items-center h-14 relative">
+                    <!-- Currency & Input -->
+                    <div class="flex items-center flex-1 pl-3">
+                        <span class="text-white text-lg font-medium mr-1">$</span>
+                        <input type="number" id="betAmount" value="1" class="bg-transparent text-white text-lg font-medium w-full focus:outline-none" oninput="updateBetDisplay()">
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="flex items-center gap-1.5 mr-1">
+                        <button onclick="adjustBet(0.5)" class="w-10 h-10 bg-[#2a2a2a] rounded flex items-center justify-center text-gray-300 font-bold text-sm hover:bg-[#333] transition-colors">½</button>
+                        <button onclick="adjustBet(2)" class="w-10 h-10 bg-[#2a2a2a] rounded flex items-center justify-center text-gray-300 font-bold text-sm hover:bg-[#333] transition-colors">2X</button>
+                        
+                        <!-- Stacked Arrows -->
+                        <div class="flex flex-col gap-0.5">
+                            <button onclick="adjustBetSteps(1)" class="w-10 h-[19px] bg-[#2a2a2a] rounded-t flex items-center justify-center hover:bg-[#333]">
+                                <svg class="w-3 h-3 text-gray-300" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>
+                            </button>
+                            <button onclick="adjustBetSteps(-1)" class="w-10 h-[19px] bg-[#2a2a2a] rounded-b flex items-center justify-center hover:bg-[#333]">
+                                <svg class="w-3 h-3 text-gray-300" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Action Button (Moved here, removed ordering classes, changed font weight) -->
+            <button id="flushBtn" class="w-full bg-[#00FF00] hover:bg-[#32ff32] text-black font-bold text-xl py-4 rounded-lg shadow-[0_0_20px_rgba(0,255,0,0.3)] transition-all active:scale-[0.98] uppercase tracking-wider">
+                BET
+            </button>
+
+            <!-- Spacer (To fill remaining space below) -->
+            <div class="flex-1"></div>
+
+        </div>
+    </div>
+
+    <!-- RIGHT PANEL: GAME CANVAS -->
+    <div class="w-full h-[50%] md:h-full md:flex-1 bg-black relative overflow-hidden">
+        <div class="canvas-container" id="canvasContainer">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+        
+        <!-- Top Right Notification Area -->
+        <div id="notificationArea" class="absolute top-6 right-6 z-40 flex flex-col gap-3 items-end pointer-events-none"></div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION & ASSETS ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvasContainer');
+        
+        const bgImage = new Image();
+        bgImage.src = 'bg.png'; 
+        
+        const waterImage = new Image();
+        waterImage.src = 'water.png'; 
+        
+        // Load Logo for Intro Overlay
+        const logoImage = new Image();
+        logoImage.src = 'flush.png';
+
+        // Intro Video Setup
+        const introVideo = document.getElementById('introVideo');
+        let videoPlaying = true;
+        let videoAlpha = 1.0;
+        let logoAlpha = 1.0; // New alpha state for the logo overlay
+
+        // Attempt to auto-play video (Muted)
+        introVideo.play().catch(error => {
+            console.log("Autoplay prevented. Waiting for interaction.");
+        });
+        // Ensure play on first interaction if autoplay failed
+        window.addEventListener('click', () => {
+            if (introVideo.paused && videoPlaying) {
+                introVideo.play();
+            }
+        }, { once: true });
+
+        const itemSources = ['item1.png', 'item2.png', 'item3.png', 'item4.png', 'item5.png', 'item6.png']; 
+        const itemImages = itemSources.map(src => {
+            const img = new Image();
+            img.src = src;
+            return img;
+        });
+
+        let balance = 2000.00;
+        let isAuto = false;
+        let autoCount = 0;
+        let currentRisk = 'low';
+        
+        let activeItems = [];
+        let particles = [];
+        let vortexAngle = 0;
+        let lastWinMultiplier = 1.0;
+        let displayMultiplier = 1.0;
+        let lastMultiplierUpdate = 0;
+        let maxRadius = 0;
+        
+        const emojis = ['💩', '🐠', '💊', '💎', '🦆', '🧼', '🚬']; 
+        
+        const colors = {
+            low: '#E128FF',
+            medium: '#48C8FF',
+            high: '#FFED28'
+        };
+
+        function resize() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            maxRadius = Math.min(canvas.width, canvas.height) * 0.52;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Floater {
+            constructor(multiplierOutcome, betAmount) {
+                this.angle = Math.random() * Math.PI * 2;
+                this.radius = maxRadius * 0.8; 
+                
+                this.useImage = false;
+                this.sprite = null;
+                this.emoji = emojis[Math.floor(Math.random() * emojis.length)];
+
+                if (itemImages.length > 0) {
+                    const randImg = itemImages[Math.floor(Math.random() * itemImages.length)];
+                    if (randImg.complete && randImg.naturalWidth !== 0) {
+                        this.sprite = randImg;
+                        this.useImage = true;
+                    }
+                }
+
+                this.speed = 0.02; 
+                this.inwardSpeed = 0.8; 
+                this.wobblePhase = Math.random() * Math.PI * 2;
+                
+                this.outcome = multiplierOutcome;
+                this.betAmount = betAmount; 
+                this.finished = false;
+            }
+
+            update() {
+                this.angle += this.speed;
+                this.radius -= this.inwardSpeed;
+                
+                // Speeded up physics calculations (+20%)
+                this.speed = 0.048 + (150 / (this.radius + 50)) * 0.01;
+                this.inwardSpeed = 2.4 + (150 / (this.radius + 50)) * 0.1;
+                
+                this.wobblePhase += 0.1;
+
+                if (this.radius < 30) {
+                    this.finished = true;
+                    finishRound(this, this.outcome, this.betAmount);
+                    createSplash(0, 0, colors.medium);
+                }
+            }
+
+            draw(ctx, centerX, centerY) {
+                const wobble = Math.sin(this.wobblePhase) * 5;
+                const x = centerX + Math.cos(this.angle) * (this.radius + wobble);
+                const y = centerY + Math.sin(this.angle) * (this.radius + wobble);
+
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(this.angle + Math.PI / 2 + this.wobblePhase * 0.5);
+
+                // SHADOWS DISABLED FOR PERFORMANCE
+                if (this.useImage && this.sprite) {
+                    ctx.drawImage(this.sprite, -50, -50, 100, 100);
+                } else {
+                    ctx.font = "52px Arial";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(this.emoji, 0, 0);
+                }
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 3 + 1;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.03 + 0.01;
+            }
+            update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; }
+            draw(ctx, centerX, centerY) {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(centerX + this.x, centerY + this.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function drawBowl(centerX, centerY, maxRadius) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, maxRadius, 0, Math.PI * 2);
+            ctx.clip();
+            
+            ctx.translate(centerX, centerY);
+            ctx.rotate(vortexAngle);
+
+            if (waterImage.complete && waterImage.naturalWidth !== 0) {
+                ctx.globalAlpha = 0.8;
+                ctx.drawImage(waterImage, -maxRadius, -maxRadius, maxRadius * 2, maxRadius * 2);
+                ctx.globalAlpha = 1.0;
+            } else {
+                ctx.fillStyle = '#0f172a'; 
+                ctx.fillRect(-maxRadius, -maxRadius, maxRadius*2, maxRadius*2);
+                
+                for (let i = 0; i < 8; i++) {
+                    ctx.beginPath();
+                    for (let r = 0; r < maxRadius - 20; r += 5) {
+                        const a = (r * 0.02) + (i * (Math.PI * 2) / 8);
+                        const x = Math.cos(a) * r;
+                        const y = Math.sin(a) * r;
+                        if (r === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+                    ctx.strokeStyle = `rgba(72, 200, 255, ${0.15 + (i%2)*0.1})`; 
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, maxRadius, 0, Math.PI * 2);
+            ctx.lineWidth = 12;
+            ctx.strokeStyle = '#222'; 
+            ctx.stroke();
+
+            const drainRadius = maxRadius * 0.2;
+            const drainGradient = ctx.createRadialGradient(centerX, centerY, drainRadius * 0.2, centerX, centerY, drainRadius);
+            drainGradient.addColorStop(0, '#000000');
+            drainGradient.addColorStop(1, 'rgba(12, 10, 31, 0.8)'); 
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, drainRadius, 0, Math.PI * 2);
+            ctx.fillStyle = drainGradient;
+            ctx.fill();
+            
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = getMultiplierColor(displayMultiplier);
+            ctx.stroke();
+        }
+
+        function drawMultiplier(centerX, centerY, radius) {
+            if (activeItems.length === 0 && lastWinMultiplier === 1.0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.font = "bold 20px 'Roboto'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("READY", centerX, centerY);
+                return;
+            }
+            
+            ctx.save();
+            const scale = 1 + Math.sin(Date.now() / 100) * 0.05; 
+            ctx.translate(centerX, centerY);
+            ctx.scale(scale, scale);
+            
+            // Reverted to static, performant font size
+            ctx.font = "black 72px 'Roboto'"; 
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            
+            const col = getMultiplierColor(displayMultiplier);
+            ctx.fillStyle = col;
+            
+            // SHADOWS REMOVED for Speed
+            // ctx.shadowColor = col;
+            // ctx.shadowBlur = 20;
+            
+            ctx.fillText(displayMultiplier.toFixed(2) + "x", 0, 0);
+            ctx.restore();
+        }
+
+        function getMultiplierColor(val) {
+            if (val < 2.0) return colors.low;
+            if (val < 10.0) return colors.medium;
+            return colors.high;
+        }
+
+        function createSplash(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function render() {
+            // 0. Clear Screen (Black Base)
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            // Water Direction Reversed & Speed Increased
+            vortexAngle += 0.04;
+
+            // 1. Draw Water / Bowl (Bottom Layer)
+            drawBowl(centerX, centerY, maxRadius);
+
+            // 2. Draw Particles (Middle Layer)
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw(ctx, centerX, centerY);
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            // 3. Draw Items (Middle Layer)
+            for (let i = activeItems.length - 1; i >= 0; i--) {
+                activeItems[i].update();
+                activeItems[i].draw(ctx, centerX, centerY);
+                if (activeItems[i].finished) {
+                    activeItems.splice(i, 1);
+                }
+            }
+
+            // 4. Draw Background Image (Overlay Layer)
+            if (bgImage.complete && bgImage.naturalWidth !== 0) {
+                const imgRatio = bgImage.naturalWidth / bgImage.naturalHeight;
+                const canvasRatio = canvas.width / canvas.height;
+                let renderW, renderH, renderX, renderY;
+
+                if (canvasRatio > imgRatio) {
+                    renderW = canvas.width;
+                    renderH = canvas.width / imgRatio;
+                    renderX = 0;
+                    renderY = (canvas.height - renderH) / 2; 
+                } else {
+                    renderH = canvas.height;
+                    renderW = canvas.height * imgRatio;
+                    renderY = 0;
+                    renderX = (canvas.width - renderW) / 2; 
+                }
+
+                ctx.drawImage(bgImage, renderX, renderY, renderW, renderH);
+            }
+
+            // --- UPDATE MULTIPLIER LOGIC (Continuous Attract Mode) ---
+            const now = Date.now();
+            if (now - lastMultiplierUpdate > 150) {
+                let visualOutcome = 0;
+                
+                if (currentRisk === 'low') {
+                    visualOutcome = Math.random() * 5; 
+                } else if (currentRisk === 'medium') {
+                    visualOutcome = Math.random() * 25;
+                } else {
+                    if(Math.random() > 0.6) {
+                         visualOutcome = 10 + Math.random() * 90; 
+                    } else {
+                         visualOutcome = Math.random() * 10; 
+                    }
+                }
+                
+                displayMultiplier = parseFloat(visualOutcome.toFixed(2));
+                lastMultiplierUpdate = now;
+            }
+            
+            // 5. Draw Multiplier Text (Top Layer)
+            drawMultiplier(centerX, centerY, maxRadius);
+
+            // 6. Draw Intro Video & Logo Overlay (On Top of Everything)
+            // We keep rendering this block as long as the logo is still visible
+            if (logoAlpha > 0) {
+                
+                // A. Draw Video
+                if (videoAlpha > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = videoAlpha;
+                    
+                    // Video Scaling (Cover)
+                    const vW = introVideo.videoWidth || 1920;
+                    const vH = introVideo.videoHeight || 1080;
+                    const vRatio = vW / vH;
+                    
+                    const canvasRatio = canvas.width / canvas.height;
+                    let renderW, renderH, renderX, renderY;
+
+                    if (canvasRatio > vRatio) {
+                        renderW = canvas.width;
+                        renderH = canvas.width / vRatio;
+                        renderX = 0;
+                        renderY = (canvas.height - renderH) / 2; 
+                    } else {
+                        renderH = canvas.height;
+                        renderW = canvas.height * vRatio;
+                        renderY = 0;
+                        renderX = (canvas.width - renderW) / 2; 
+                    }
+
+                    ctx.drawImage(introVideo, renderX, renderY, renderW, renderH);
+                    ctx.restore();
+                }
+
+                // B. Draw Logo Overlay (Centered, 286px wide)
+                if (logoImage.complete && logoImage.naturalWidth !== 0) {
+                    ctx.save();
+                    ctx.globalAlpha = logoAlpha;
+                    
+                    const logoW = 286;
+                    // Maintain aspect ratio
+                    const logoH = (logoImage.naturalHeight / logoImage.naturalWidth) * logoW;
+                    const logoX = (canvas.width - logoW) / 2;
+                    const logoY = (canvas.height - logoH) / 2;
+                    
+                    ctx.drawImage(logoImage, logoX, logoY, logoW, logoH);
+                    ctx.restore();
+                }
+
+                // C. Handle Sequencing Fades
+                if (introVideo.ended) {
+                    // 1. Fade Video First
+                    if (videoAlpha > 0) {
+                        videoAlpha -= 0.02; 
+                        if(videoAlpha < 0) videoAlpha = 0;
+                    } 
+                    // 2. Fade Logo After Video is Gone
+                    else {
+                        // Increased fade speed from 0.02 to 0.08
+                        logoAlpha -= 0.08;
+                        if(logoAlpha < 0) {
+                            logoAlpha = 0;
+                            videoPlaying = false; // Stop logic completely
+                        }
+                    }
+                }
+            }
+            
+            requestAnimationFrame(render);
+        }
+        render();
+
+        function setRisk(level) {
+            currentRisk = level;
+            ['low', 'medium', 'high'].forEach(r => {
+                const btn = document.getElementById(`risk${r.charAt(0).toUpperCase() + r.slice(1)}`);
+                btn.className = "flex-1 py-3 rounded-lg border border-[#333] bg-[#1a1a1a] text-gray-300 font-bold text-sm hover:bg-[#222] transition-all";
+            });
+            
+            const activeBtn = document.getElementById(`risk${level.charAt(0).toUpperCase() + level.slice(1)}`);
+            if(level === 'low') {
+                activeBtn.className = "flex-1 py-3 rounded-lg border border-[#E128FF] bg-[#2d1b3e] text-[#E128FF] font-bold text-sm transition-all shadow-[0_0_10px_rgba(225,40,255,0.2)]";
+            } else if (level === 'medium') {
+                activeBtn.className = "flex-1 py-3 rounded-lg border border-[#48C8FF] bg-[#1b2b3e] text-[#48C8FF] font-bold text-sm transition-all shadow-[0_0_10px_rgba(72,200,255,0.2)]";
+            } else {
+                activeBtn.className = "flex-1 py-3 rounded-lg border border-[#FFED28] bg-[#3e3a1b] text-[#FFED28] font-bold text-sm transition-all shadow-[0_0_10px_rgba(255,237,40,0.2)]";
+            }
+        }
+
+        function adjustBet(factor) {
+            const input = document.getElementById('betAmount');
+            let val = parseFloat(input.value) || 0;
+            val = val * factor;
+            if (val < 0.10) val = 0.10;
+            if (val > balance) val = balance;
+            input.value = Math.floor(val * 100) / 100;
+        }
+
+        function adjustBetSteps(step) {
+            const input = document.getElementById('betAmount');
+            let val = parseFloat(input.value) || 0;
+            val += step;
+            if (val < 1) val = 1;
+            input.value = val;
+        }
+
+        function generateOutcome() {
+            const r = Math.random();
+            if (currentRisk === 'low') {
+                if (r < 0.30) return parseFloat((Math.random() * 0.9).toFixed(2)); 
+                if (r < 0.80) return parseFloat((Math.random() * (1.5 - 1.1) + 1.1).toFixed(2)); 
+                return parseFloat((Math.random() * (2.5 - 1.6) + 1.6).toFixed(2)); 
+            } else if (currentRisk === 'high') {
+                if (r < 0.70) return parseFloat((Math.random() * 0.9).toFixed(2)); 
+                if (r < 0.90) return parseFloat((Math.random() * (5.0 - 2.0) + 2.0).toFixed(2)); 
+                return parseFloat((Math.random() * (50.0 - 10.0) + 10.0).toFixed(2)); 
+            } else {
+                if (r < 0.45) return parseFloat((Math.random() * 0.9).toFixed(2)); 
+                if (r < 0.75) return parseFloat((Math.random() * (1.5 - 1.1) + 1.1).toFixed(2)); 
+                if (r < 0.95) return parseFloat((Math.random() * (3.0 - 1.6) + 1.6).toFixed(2)); 
+                return parseFloat((Math.random() * (10.0 - 3.0) + 3.0).toFixed(2)); 
+            }
+        }
+
+        async function startGame() {
+            const betInput = document.getElementById('betAmount');
+            const bet = parseFloat(betInput.value);
+
+            if (isNaN(bet) || bet <= 0) { return; }
+            
+            if (bet > balance) {
+                stopAuto();
+                return;
+            }
+
+            balance -= bet;
+            updateBalanceDisplay();
+
+            const outcome = generateOutcome();
+            
+            activeItems.push(new Floater(outcome, bet));
+        }
+
+        function finishRound(item, outcome, betAmount) {
+            lastWinMultiplier = outcome;
+            const winAmount = betAmount * outcome;
+            
+            balance += winAmount;
+            updateBalanceDisplay();
+            
+            addNotificationPill(outcome, winAmount);
+
+            if (isAuto) {
+                let limit = document.getElementById('autoCount').value;
+                if(limit > 0) {
+                    limit--;
+                    document.getElementById('autoCount').value = limit;
+                    if (limit === 0) { stopAuto(); return; }
+                }
+                setTimeout(() => startGame(), 1500);
+            } 
+        }
+
+        function addNotificationPill(mult, win) {
+            const container = document.getElementById('notificationArea');
+            const pill = document.createElement('div');
+            
+            let borderColor, textColor;
+            if (mult < 2.0) {
+                borderColor = colors.low;
+                textColor = `text-[${colors.low}]`;
+            } else if (mult < 10.0) {
+                borderColor = colors.medium;
+                textColor = `text-[${colors.medium}]`;
+            } else {
+                borderColor = colors.high;
+                textColor = `text-[${colors.high}]`;
+            }
+
+            pill.className = `notification-pill bg-black/80 backdrop-blur border-2 rounded-full px-3 py-1 flex gap-2 items-center min-w-[110px] justify-between`;
+            pill.style.borderColor = borderColor;
+
+            pill.innerHTML = `
+                <span class="font-black text-sm" style="color:${borderColor}">${mult.toFixed(2)}x</span>
+                <span class="font-bold text-white font-mono text-xs">$${win.toFixed(2)}</span>
+            `;
+
+            container.prepend(pill);
+
+            setTimeout(() => {
+                pill.classList.add('fading');
+                setTimeout(() => {
+                    if(pill.parentNode) pill.parentNode.removeChild(pill);
+                }, 500);
+            }, 3000);
+        }
+
+        function updateBalanceDisplay() {
+            document.getElementById('balanceDisplay').innerText = balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        function toggleControls(enabled) {
+            document.getElementById('flushBtn').disabled = !enabled && !isAuto;
+        }
+
+        function stopAuto() {
+            isAuto = false;
+            document.getElementById('btnAuto').className = "flex-1 py-3 rounded-lg border border-[#333] bg-[#1a1a1a] text-gray-300 font-bold text-sm hover:bg-[#222] transition-all";
+            document.getElementById('btnManual').className = "flex-1 py-3 rounded-lg border border-[#00FF00] bg-[#00FF00]/20 text-[#00FF00] font-bold text-sm transition-all shadow-[0_0_10px_rgba(0,255,0,0.1)]";
+            document.getElementById('autoSettings').classList.add('hidden');
+            document.getElementById('flushBtn').innerText = "BET";
+        }
+
+        document.getElementById('flushBtn').addEventListener('click', () => {
+            if (isAuto) {
+                stopAuto();
+            } else {
+                startGame();
+            }
+        });
+
+        document.getElementById('btnManual').addEventListener('click', () => {
+            stopAuto();
+        });
+
+        document.getElementById('btnAuto').addEventListener('click', () => {
+            if(isAuto) return;
+            isAuto = true;
+            
+            document.getElementById('btnManual').className = "flex-1 py-3 rounded-lg border border-[#333] bg-[#1a1a1a] text-gray-300 font-bold text-sm hover:bg-[#222] transition-all";
+            document.getElementById('btnAuto').className = "flex-1 py-3 rounded-lg border border-[#00FF00] bg-[#00FF00]/20 text-[#00FF00] font-bold text-sm transition-all shadow-[0_0_10px_rgba(0,255,0,0.1)]";
+            document.getElementById('autoSettings').classList.remove('hidden');
+            document.getElementById('flushBtn').innerText = "START AUTO";
+        });
+
+    </script>
+</body>
+</html>
